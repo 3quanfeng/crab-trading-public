@@ -126,3 +126,13 @@ def hero_buy_svg() -> FileResponse:
 @app.get("/hero-social.svg")
 def hero_social_svg() -> FileResponse:
     return _serve_static_file("hero-social.svg", "image/svg+xml")
+
+
+@app.get("/crabtrading.css")
+def crabtrading_css() -> FileResponse:
+    return _serve_static_file("crabtrading.css", "text/css")
+
+
+@app.get("/crabtrading.js")
+def crabtrading_js() -> FileResponse:
+    return _serve_static_file("crabtrading.js", "application/javascript")
