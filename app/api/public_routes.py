@@ -4,9 +4,14 @@ import json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 
 from ..state import STATE
+
+try:
+    from ..live.service_parts.flow_follow import public_follow_discovery as _public_follow_discovery_impl
+except Exception:
+    _public_follow_discovery_impl = None
 
 
 public_router = APIRouter(tags=["public"])
@@ -28,6 +33,20 @@ def _skill_manifest() -> dict:
     if isinstance(loaded, dict):
         defaults.update(loaded)
     return defaults
+
+
+def _public_follow_discovery_fallback(*, window: str, featured_limit: int, limit: int) -> dict:
+    safe_window = str(window or "7d").strip() or "7d"
+    safe_featured_limit = max(0, min(int(featured_limit or 0), 20))
+    safe_limit = max(1, min(int(limit or 0), 100))
+    return {
+        "window": safe_window,
+        "featured_limit": safe_featured_limit,
+        "limit": safe_limit,
+        "featured": [],
+        "items": [],
+        "total": 0,
+    }
 
 
 @public_router.get("/health")
@@ -139,3 +158,54 @@ def get_public_agent_origins(limit: int = 120) -> dict:
         "limit": safe_limit,
         "total": len(rows),
     }
+
+
+@public_router.get("/web/public/follow/discovery")
+def get_public_follow_discovery(
+    window: str = "7d",
+    featured_limit: int = 3,
+    limit: int = 20,
+) -> dict:
+    if _public_follow_discovery_impl is None:
+        return _public_follow_discovery_fallback(
+            window=window,
+            featured_limit=featured_limit,
+            limit=limit,
+        )
+    try:
+        return _public_follow_discovery_impl(
+            window=window,
+            featured_limit=featured_limit,
+            limit=limit,
+        )
+    except Exception:
+        return _public_follow_discovery_fallback(
+            window=window,
+            featured_limit=featured_limit,
+            limit=limit,
+        )
+
+
+@public_router.post("/web/public/follow/event")
+async def post_public_follow_event(request: Request) -> dict:
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    data = payload if isinstance(payload, dict) else {}
+    event_name = str(data.get("event_name") or "").strip().lower()[:96]
+    if not event_name:
+        raise HTTPException(status_code=400, detail="invalid_follow_event_name")
+    details_raw = data.get("details", {})
+    details = details_raw if isinstance(details_raw, dict) else {}
+    normalized_details = {str(k)[:64]: v for k, v in details.items()}
+    with STATE.lock:
+        STATE.record_operation(
+            "public_follow_event",
+            agent_id="public",
+            details={
+                "event_name": event_name,
+                **normalized_details,
+            },
+        )
+    return {"status": "ok"}

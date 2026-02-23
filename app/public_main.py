@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -33,6 +34,14 @@ def home() -> HTMLResponse:
     if html_path.exists():
         return HTMLResponse(content=_read_text_or_empty(html_path))
     return HTMLResponse(content="<h1>Crab Trading</h1>")
+
+
+@app.get("/discover", response_class=HTMLResponse)
+def discover_page() -> HTMLResponse:
+    html_path = STATIC_DIR / "discover.html"
+    if html_path.exists():
+        return HTMLResponse(content=_read_text_or_empty(html_path))
+    return HTMLResponse(content="<h1>Crab Trading Discover</h1>")
 
 
 @app.get("/skill.md", response_class=PlainTextResponse)
@@ -113,6 +122,31 @@ def crab_mark_master_svg() -> FileResponse:
     return _serve_static_file("crab-mark-master.svg", "image/svg+xml")
 
 
+@app.get("/crab-mark-ice.svg")
+def crab_mark_ice_svg() -> FileResponse:
+    return _serve_static_file("crab-mark-ice.svg", "image/svg+xml")
+
+
+@app.get("/define-orb-crab.svg")
+def define_orb_crab_svg() -> FileResponse:
+    return _serve_static_file("define-orb-crab.svg", "image/svg+xml")
+
+
+@app.get("/crab-orb-core.png")
+def crab_orb_core_png() -> FileResponse:
+    return _serve_static_file("crab-orb-core.png", "image/png")
+
+
+@app.get("/crab-orb-core-alpha.png")
+def crab_orb_core_alpha_png() -> FileResponse:
+    return _serve_static_file("crab-orb-core-alpha.png", "image/png")
+
+
+@app.get("/crab-network-cluster.png")
+def crab_network_cluster_png() -> FileResponse:
+    return _serve_static_file("crab-network-cluster.png", "image/png")
+
+
 @app.get("/hero-watch.svg")
 def hero_watch_svg() -> FileResponse:
     return _serve_static_file("hero-watch.svg", "image/svg+xml")
@@ -128,6 +162,14 @@ def hero_social_svg() -> FileResponse:
     return _serve_static_file("hero-social.svg", "image/svg+xml")
 
 
+@app.get("/crabs-network/{icon_name}")
+def crab_network_svg(icon_name: str) -> FileResponse:
+    safe_name = str(icon_name or "").strip()
+    if not re.fullmatch(r"crab-net-(0[1-9]|10)\.svg", safe_name):
+        raise HTTPException(status_code=404, detail="file_not_found")
+    return _serve_static_file(f"crabs-network/{safe_name}", "image/svg+xml")
+
+
 @app.get("/crabtrading.css")
 def crabtrading_css() -> FileResponse:
     return _serve_static_file("crabtrading.css", "text/css")
@@ -136,3 +178,13 @@ def crabtrading_css() -> FileResponse:
 @app.get("/crabtrading.js")
 def crabtrading_js() -> FileResponse:
     return _serve_static_file("crabtrading.js", "application/javascript")
+
+
+@app.get("/discover.css")
+def discover_css() -> FileResponse:
+    return _serve_static_file("discover.css", "text/css")
+
+
+@app.get("/discover.js")
+def discover_js() -> FileResponse:
+    return _serve_static_file("discover.js", "application/javascript")
