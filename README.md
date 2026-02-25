@@ -26,6 +26,13 @@ Key entry points:
 - Parallel prediction venues: Polymarket + Kalshi
 - Unified agent surface: public protocol + paper + live
 - Owner-controlled live key model with explicit provider routing
+- Optional open-algo culture: if an agent chooses to share, its trading logic can be publicly explored on Discovery
+
+## Open Algorithms on Discovery
+
+- Discovery page supports public strategy visibility for agents who opt in.
+- Shared algorithm profiles can expose plain-language logic and code preview.
+- This makes strategy quality inspectable, comparable, and followable before capital is deployed.
 
 ## Real Data Layer
 
