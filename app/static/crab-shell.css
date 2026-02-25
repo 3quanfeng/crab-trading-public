@@ -1,0 +1,277 @@
+:root {
+  --ct-font-sans: "Avenir Next", "SF Pro Display", "Segoe UI", sans-serif;
+  --ct-bg-root: #090f1a;
+  --ct-bg-top: #050912;
+  --ct-bg-deep: #060d1d;
+  --ct-text-main: #edf4ff;
+  --ct-text-subtle: #bcc8dc;
+  --ct-text-muted: #8ea2c5;
+  --ct-line-soft: rgba(109, 138, 190, 0.22);
+  --ct-line-btn: rgba(142, 177, 228, 0.38);
+  --ct-btn-fill: rgba(18, 38, 70, 0.56);
+  --ct-btn-fill-active: rgba(35, 72, 122, 0.72);
+  --ct-btn-fill-primary: rgba(21, 74, 145, 0.46);
+  --ct-layout-max: 1520px;
+}
+
+body.ct-shell {
+  margin: 0;
+  color: var(--ct-text-main);
+  font-family: var(--ct-font-sans);
+  background:
+    radial-gradient(58vw 58vw at 90% -8%, rgba(70, 34, 84, 0.24), transparent 74%),
+    radial-gradient(58vw 58vw at 10% -12%, rgba(28, 78, 149, 0.22), transparent 74%),
+    linear-gradient(180deg, var(--ct-bg-top) 0%, var(--ct-bg-root) 42%, var(--ct-bg-deep) 100%);
+}
+
+body.ct-shell.ct-shell--home {
+  background:
+    radial-gradient(40vw 40vw at 50% 4%, rgba(119, 150, 204, 0.07), transparent 72%),
+    radial-gradient(30vw 30vw at 12% 86%, rgba(111, 165, 185, 0.04), transparent 74%),
+    var(--ct-bg-root);
+}
+
+.ct-shell .ct-debug-version {
+  position: fixed;
+  left: max(8px, env(safe-area-inset-left));
+  bottom: max(6px, env(safe-area-inset-bottom));
+  z-index: 20;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: rgba(188, 200, 220, 0.46);
+  pointer-events: none;
+  user-select: none;
+}
+
+.ct-shell.ct-shell--home .ct-debug-version {
+  color: rgba(188, 200, 220, 0.38);
+}
+
+.ct-shell .ct-noncard {
+  color: var(--ct-text-main);
+  font-family: var(--ct-font-sans);
+}
+
+.ct-shell .ct-noncard :where(h1, h2, h3, h4, p, ul, ol, li, label, input, textarea, button, a, small, strong, span) {
+  font-family: var(--ct-font-sans);
+}
+
+.ct-shell .ct-noncard .ct-card-zone :where(h1, h2, h3, h4, p, ul, ol, li, label, input, textarea, button, a, small, strong, span) {
+  font-family: inherit;
+  color: inherit;
+}
+
+.ct-shell .ct-header {
+  width: min(var(--ct-layout-max), calc(100% - 128px));
+  margin: 0 auto;
+  padding: 22px 0 14px;
+  border-bottom: 1px solid var(--ct-line-soft);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ct-shell .ct-header-inner {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ct-shell .ct-header--link-nav .ct-header-nav {
+  margin-left: auto;
+}
+
+.ct-shell .ct-header-brand {
+  display: inline-flex;
+  width: 46px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.ct-shell .ct-header-brand-mark {
+  width: 42px;
+  height: 36px;
+  display: block;
+  object-fit: contain;
+}
+
+.ct-shell .ct-header-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-shell .ct-header-link {
+  color: var(--ct-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-decoration: none;
+  transition: color 160ms ease;
+  white-space: nowrap;
+}
+
+.ct-shell .ct-header-link:hover,
+.ct-shell .ct-header-link:focus-visible {
+  color: var(--ct-text-subtle);
+}
+
+.ct-shell .ct-header-btn {
+  min-width: 122px;
+  height: 50px;
+  border-radius: 14px;
+  border: 1px solid var(--ct-line-btn);
+  background: var(--ct-btn-fill);
+  color: var(--ct-text-main);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  transition: filter 140ms ease, transform 140ms ease, border-color 140ms ease;
+  white-space: nowrap;
+}
+
+.ct-shell .ct-header-btn:hover,
+.ct-shell .ct-header-btn:focus-visible {
+  filter: brightness(1.08);
+  border-color: rgba(178, 206, 248, 0.5);
+}
+
+.ct-shell .ct-header-btn:active {
+  transform: translateY(1px);
+}
+
+.ct-shell .ct-header-btn--primary {
+  background: var(--ct-btn-fill-primary);
+}
+
+.ct-shell .ct-header-btn--active {
+  background: var(--ct-btn-fill-active);
+}
+
+.ct-shell .ct-header-btn--account {
+  min-width: 260px;
+  max-width: 340px;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ct-shell .ct-header--compact {
+  width: min(1100px, calc(100% - 48px));
+  padding-top: 16px;
+  padding-bottom: 10px;
+}
+
+.ct-shell .ct-header--compact .ct-header-brand {
+  width: 34px;
+  height: 30px;
+}
+
+.ct-shell .ct-header--compact .ct-header-brand-mark {
+  width: 30px;
+  height: 26px;
+}
+
+.ct-shell .ct-header--compact .ct-header-link {
+  font-size: 14px;
+}
+
+.ct-shell .ct-header--compact .ct-header-btn {
+  height: 40px;
+  min-width: 106px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+@media (max-width: 1100px) {
+  .ct-shell .ct-header {
+    width: min(var(--ct-layout-max), calc(100% - 80px));
+  }
+}
+
+@media (max-width: 767px) {
+  .ct-shell .ct-header {
+    width: calc(100% - 48px);
+    padding-top: 18px;
+    padding-bottom: 12px;
+    gap: 10px;
+  }
+
+  .ct-shell .ct-header-brand {
+    width: 38px;
+    height: 34px;
+  }
+
+  .ct-shell .ct-header-brand-mark {
+    width: 34px;
+    height: 30px;
+  }
+
+  .ct-shell .ct-header-nav {
+    gap: 8px;
+  }
+
+  .ct-shell .ct-header-link {
+    font-size: 14px;
+  }
+
+  .ct-shell .ct-header-btn {
+    min-width: 108px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 14px;
+    padding: 0 14px;
+  }
+
+  .ct-shell .ct-header-btn--account {
+    min-width: 154px;
+    max-width: 220px;
+  }
+
+  .ct-shell .ct-header--compact {
+    width: calc(100% - 30px);
+    padding-top: 14px;
+    padding-bottom: 9px;
+  }
+}
+
+@media (max-width: 639px) {
+  html,
+  body {
+    overflow-x: hidden;
+    overflow-x: clip;
+  }
+
+  .ct-shell,
+  .ct-shell .ct-header,
+  .ct-shell .ct-header-inner,
+  .ct-shell .ct-header-nav {
+    min-width: 0;
+  }
+
+  .ct-shell .ct-header-nav > * {
+    min-width: 0;
+  }
+
+  .ct-shell .ct-header-link,
+  .ct-shell .ct-header-btn {
+    min-width: 0;
+  }
+
+  .ct-shell .ct-header-inner,
+  .ct-shell .ct-header-nav {
+    overflow: hidden;
+  }
+}

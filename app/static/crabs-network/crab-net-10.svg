@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <g stroke="currentColor" stroke-width="4.05" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 67c0-17 12-30 28-30s28 13 28 30-12 27-28 27-28-10-28-27Z"/>
+    <path d="M43 50c4-7 10-11 18-14"/>
+    <path d="M78 36c8 3 14 7 19 14"/>
+    <path d="M28 53c-8-5-10-15-7-23 6 1 11 4 15 9"/>
+    <path d="M92 39c4-5 9-8 15-9 3 8 1 18-7 23"/>
+    <path d="M37 85 22 98"/>
+    <path d="M49 91 37 104"/>
+    <path d="M70 91 82 104"/>
+    <path d="M83 85 98 98"/>
+    <circle cx="51" cy="63" r="5.5"/>
+    <circle cx="70" cy="63" r="5.5"/>
+  </g>
+</svg>

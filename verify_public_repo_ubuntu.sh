@@ -4,8 +4,8 @@ set -euo pipefail
 # Verify crab-trading-public on Ubuntu:
 # 1) sync to origin/main
 # 2) create venv + install deps
-# 3) compile + import checks
-# 4) start uvicorn and hit /health
+# 3) contract verify + seed
+# 4) start uvicorn and run end-to-end public flow
 
 REPO_DIR="${1:-$HOME/crab-trading-public}"
 REMOTE="${REMOTE:-origin}"
@@ -39,50 +39,29 @@ if ! git remote get-url "${REMOTE}" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[1/6] Fetch + reset to ${REMOTE}/${BRANCH}"
+echo "[1/8] Fetch + reset to ${REMOTE}/${BRANCH}"
 git fetch --prune "${REMOTE}"
 git checkout "${BRANCH}"
 git reset --hard "${REMOTE}/${BRANCH}"
 
-echo "[2/6] Build venv ${VENV_DIR}"
+echo "[2/8] Build venv ${VENV_DIR}"
 python3 -m venv "${VENV_DIR}"
 # shellcheck disable=SC1090
 source "${VENV_DIR}/bin/activate"
 
-echo "[3/6] Install dependencies"
+echo "[3/8] Install dependencies"
 python -m pip install --upgrade pip >/tmp/public_verify_pip.log 2>&1
 python -m pip install -r requirements.txt >>/tmp/public_verify_pip.log 2>&1
 
-echo "[4/6] Compile + import smoke checks"
-python -m compileall -q app deploy.py
-python - <<'PY'
-import importlib
-from fastapi.routing import APIRoute
+echo "[4/8] Verify contract + seed demo"
+python3 scripts/verify_public_contract.py
+python3 scripts/seed_public_demo.py --scenario baseline --seed 20260225 --reset >/tmp/public_seed_summary.json
+cat /tmp/public_seed_summary.json
 
-mod = importlib.import_module("app.public_main")
-app = getattr(mod, "app", None)
-if app is None:
-    raise SystemExit("PUBLIC_MAIN_APP_MISSING")
+echo "[5/8] Compile check"
+python -m compileall -q app scripts/verify_public_contract.py scripts/seed_public_demo.py
 
-paths = []
-for route in app.routes:
-    if isinstance(route, APIRoute):
-        paths.append(str(route.path))
-
-required = ["/health", "/api/v1/agents/register", "/web/sim/account"]
-missing = [path for path in required if path not in paths]
-if missing:
-    raise SystemExit(f"PUBLIC_ROUTE_MISSING:{','.join(missing)}")
-
-blocked_prefixes = ("/web/live/", "/web/owner/", "/internal/")
-for path in paths:
-    if any(path.startswith(prefix) for prefix in blocked_prefixes):
-        raise SystemExit(f"PUBLIC_PRIVATE_ROUTE_EXPOSED:{path}")
-
-print("IMPORT_OK")
-PY
-
-echo "[5/6] Start uvicorn and check ${HEALTH_PATH}"
+echo "[6/8] Start uvicorn and check ${HEALTH_PATH}"
 HEALTH_OUT="$(mktemp)"
 UVICORN_LOG="$(mktemp)"
 export CRAB_LIVE_ENABLED_GLOBAL=0
@@ -112,6 +91,78 @@ if [[ "${READY}" != "1" ]]; then
   exit 1
 fi
 
-echo "[6/6] Result"
+echo "[7/8] Run end-to-end public API flow"
+BASE_URL="http://127.0.0.1:${PORT}"
+
+ALPHA_JSON="$(mktemp)"
+BETA_JSON="$(mktemp)"
+ORDER_JSON="$(mktemp)"
+POST_JSON="$(mktemp)"
+FOLLOW_JSON="$(mktemp)"
+
+curl -fsS -X POST "${BASE_URL}/api/v1/public/agents/register" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"verify_alpha","description":"public verify alpha"}' >"${ALPHA_JSON}"
+
+curl -fsS -X POST "${BASE_URL}/api/v1/public/agents/register" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"verify_beta","description":"public verify beta"}' >"${BETA_JSON}"
+
+ALPHA_KEY="$(python - <<PY
+import json
+print(json.load(open('${ALPHA_JSON}'))['agent']['api_key'])
+PY
+)"
+
+BETA_ID="$(python - <<PY
+import json
+print(json.load(open('${BETA_JSON}'))['agent']['name'])
+PY
+)"
+
+curl -fsS "${BASE_URL}/api/v1/public/sim/quote?symbol=TSLA" \
+  -H "Authorization: Bearer ${ALPHA_KEY}" >/tmp/public_verify_quote.json
+
+curl -fsS -X POST "${BASE_URL}/api/v1/public/sim/orders" \
+  -H "Authorization: Bearer ${ALPHA_KEY}" \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol":"TSLA","side":"BUY","qty":1.2}' >"${ORDER_JSON}"
+
+curl -fsS -X POST "${BASE_URL}/api/v1/public/forum/posts" \
+  -H "Authorization: Bearer ${ALPHA_KEY}" \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol":"TSLA","title":"verify post","content":"public verify forum post"}' >"${POST_JSON}"
+
+curl -fsS -X POST "${BASE_URL}/api/v1/public/following" \
+  -H "Authorization: Bearer ${ALPHA_KEY}" \
+  -H 'Content-Type: application/json' \
+  -d "{\"agent_id\":\"${BETA_ID}\",\"include_stock\":true,\"include_poly\":true}" >"${FOLLOW_JSON}"
+
+curl -fsS "${BASE_URL}/api/v1/public/sim/leaderboard?limit=20" >/tmp/public_verify_leaderboard.json
+curl -fsS "${BASE_URL}/api/v1/public/discovery/agents?limit=20&page=1" >/tmp/public_verify_discovery.json
+curl -fsS "${BASE_URL}/api/v1/public/following/top?limit=10" -H "Authorization: Bearer ${ALPHA_KEY}" >/tmp/public_verify_follow_top.json
+
+python - <<PY
+import json
+from pathlib import Path
+
+order = json.load(open('${ORDER_JSON}'))
+post = json.load(open('${POST_JSON}'))
+follow = json.load(open('${FOLLOW_JSON}'))
+leaderboard = json.load(open('/tmp/public_verify_leaderboard.json'))
+
+if order.get('execution_mode') != 'mock':
+    raise SystemExit('ORDER_EXECUTION_MODE_INVALID')
+if post.get('execution_mode') != 'mock':
+    raise SystemExit('FORUM_EXECUTION_MODE_INVALID')
+if follow.get('execution_mode') != 'mock':
+    raise SystemExit('FOLLOW_EXECUTION_MODE_INVALID')
+if not isinstance(leaderboard.get('leaderboard'), list) or not leaderboard.get('leaderboard'):
+    raise SystemExit('LEADERBOARD_EMPTY')
+
+print('PUBLIC_FLOW_OK')
+PY
+
+echo "[8/8] Result"
 printf "HEALTH_RESPONSE: %s\n" "$(cat "${HEALTH_OUT}")"
 printf "VERIFY_OK commit=%s branch=%s repo=%s\n" "$(git rev-parse --short HEAD)" "${BRANCH}" "${REPO_DIR}"

@@ -1,0 +1,6 @@
+{
+  "target_count": 500,
+  "poly_bet_count": 80,
+  "symbols": ["AAPL", "TSLA", "NVDA", "MSFT", "AMD", "META", "BTCUSD", "ETHUSD"],
+  "max_qty": 6.0
+}

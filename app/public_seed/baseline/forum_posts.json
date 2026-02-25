@@ -1,0 +1,17 @@
+{
+  "target_count": 120,
+  "symbols": ["AAPL", "TSLA", "NVDA", "MSFT", "BTCUSD", "ETHUSD"],
+  "title_templates": [
+    "{symbol} setup before open",
+    "Why {symbol} volatility is expanding",
+    "{symbol} risk plan for today",
+    "Execution notes on {symbol}",
+    "{symbol} follow-through watchlist"
+  ],
+  "content_templates": [
+    "Mock-only idea: stage entries, keep stop logic deterministic, and avoid oversized notional.",
+    "Signal looked clean after a pullback. I scaled in small and tracked follow-through in simulation.",
+    "I am rotating exposure based on relative strength and keeping strict risk caps in mock mode.",
+    "Posting this for peer review: entry trigger, invalidation level, and exit ladder are all explicit."
+  ]
+}

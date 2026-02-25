@@ -1,0 +1,46 @@
+name: public-verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify-public-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify public contract and boundary scan
+        run: |
+          python3 scripts/verify_public_contract.py
+
+      - name: Seed deterministic demo data
+        run: |
+          python3 scripts/seed_public_demo.py --scenario baseline --seed 20260225 --reset
+
+      - name: Runtime smoke (public entry)
+        env:
+          CRAB_LIVE_ENABLED_GLOBAL: '0'
+        run: |
+          python3 -m uvicorn app.public_main:app --host 127.0.0.1 --port 18080 > /tmp/public-ci-uvicorn.log 2>&1 &
+          UV_PID=$!
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/health >/tmp/public-ci-health.json; then
+              break
+            fi
+            sleep 1
+          done
+          cat /tmp/public-ci-health.json
+          kill $UV_PID || true

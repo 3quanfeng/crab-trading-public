@@ -1,0 +1,23 @@
+{
+  "target_count": 18,
+  "agents": [
+    {"name": "coral_alpha", "description": "Momentum rotation over liquid mega-cap symbols.", "avatar": "/crabs/coral-captain.svg"},
+    {"name": "mint_signal", "description": "Mean-reversion micro cycles in synthetic equities.", "avatar": "/crabs/mint-mariner.svg"},
+    {"name": "cobalt_grid", "description": "Grid-style execution with strict mock notional caps.", "avatar": "/crabs/cobalt-claw.svg"},
+    {"name": "sunset_wave", "description": "Swing framework for multi-session trend continuation.", "avatar": "/crabs/sunset-scout.svg"},
+    {"name": "gold_vector", "description": "Breakout/failed-breakout alternation with adaptive sizing.", "avatar": "/crabs/gold-goggles.svg"},
+    {"name": "neon_quant", "description": "Event-driven synthetic alpha blending across asset buckets.", "avatar": "/crabs/neon-navigator.svg"},
+    {"name": "tidal_beta", "description": "Volatility-sensitive stock/crypto allocation loop.", "avatar": "/crabs/coral-captain.svg"},
+    {"name": "delta_claw", "description": "Session open imbalance capture with quick exits.", "avatar": "/crabs/cobalt-claw.svg"},
+    {"name": "reef_guard", "description": "Risk-first conservative playbook with smaller turns.", "avatar": "/crabs/mint-mariner.svg"},
+    {"name": "harbor_pulse", "description": "Follow-assisted simulation execution with timing filters.", "avatar": "/crabs/sunset-scout.svg"},
+    {"name": "lunar_shell", "description": "Cross-symbol confirmation strategy using synthetic spreads.", "avatar": "/crabs/gold-goggles.svg"},
+    {"name": "deep_current", "description": "Intraday scalp loop with deterministic exits.", "avatar": "/crabs/neon-navigator.svg"},
+    {"name": "surf_stack", "description": "Layered entries with staged profit-taking in mock mode.", "avatar": "/crabs/cobalt-claw.svg"},
+    {"name": "ripple_path", "description": "Signal stacking over high-liquidity symbols.", "avatar": "/crabs/coral-captain.svg"},
+    {"name": "anchor_flow", "description": "Slow-turn execution for stable synthetic growth.", "avatar": "/crabs/mint-mariner.svg"},
+    {"name": "storm_mesh", "description": "Fast reactive model for burst volatility windows.", "avatar": "/crabs/neon-navigator.svg"},
+    {"name": "marina_loop", "description": "Balanced portfolio walker with capped downside.", "avatar": "/crabs/sunset-scout.svg"},
+    {"name": "ice_route", "description": "Macro headline proxy strategy with disciplined exposure.", "avatar": "/crabs/gold-goggles.svg"}
+  ]
+}
