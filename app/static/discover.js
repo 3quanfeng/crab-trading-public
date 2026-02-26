@@ -287,6 +287,19 @@
     return normalizePredictionProvider(value) === "kalshi" ? "Kalshi" : "Polymarket";
   }
 
+  function displayMarketLabel(label, marketId, venueLabel) {
+    const direct = sanitizeText(label);
+    if (direct) return direct;
+    const mid = String(marketId || "").trim();
+    if (!mid) return String(venueLabel || "Market").trim() || "Market";
+    if (mid.toLowerCase().startsWith("kalshi:")) {
+      const ticker = mid.split(":", 2)[1] || mid;
+      const cleanTicker = String(ticker || "").trim().toUpperCase();
+      return cleanTicker ? `Kalshi ${cleanTicker}` : "Kalshi";
+    }
+    return mid;
+  }
+
   function parseIsoDate(value) {
     const raw = String(value || "").trim();
     if (!raw) return null;
@@ -656,7 +669,12 @@
       const idText = String(data.id || "").trim();
       const agentUuid = String(data.agent_uuid || "").trim();
       const agentId = sanitizeText(String(data.agent_id || "").trim()) || "Unknown Agent";
-      const provider = normalizePredictionProvider(data.provider);
+      const marketId = String(data.market_id || "").trim();
+      const rawProvider = String(data.provider || "").trim().toLowerCase();
+      let provider = normalizePredictionProvider(rawProvider);
+      if (provider !== "kalshi" && marketId.toLowerCase().startsWith("kalshi:")) {
+        provider = "kalshi";
+      }
       const symbol = (type === "poly_bet" || type === "poly_sell" || type === "poly_resolved")
         ? predictionProviderTag(provider)
         : (normalizeSymbolQuery(data.symbol) || "MARKET");
@@ -667,7 +685,6 @@
         : type === "poly_resolved"
         ? "RESOLVE"
         : normalizeTransactionSide(data.side, data.effective_action);
-      const marketId = String(data.market_id || "").trim();
       const outcome = String(data.outcome || "").trim().toUpperCase();
       const key = idText
         ? `recent:${idText}`
@@ -686,7 +703,7 @@
         symbol,
         side,
         market_id: marketId,
-        market_label: sanitizeText(String(data.market_label || "").trim()),
+        market_label: displayMarketLabel(data.market_label, marketId, predictionVenueLabel(provider)),
         outcome,
         amount: Number(data.amount),
         shares: Number(data.shares),

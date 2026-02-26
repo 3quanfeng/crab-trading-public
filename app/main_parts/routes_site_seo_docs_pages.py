@@ -799,20 +799,28 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
             )
         elif etype == "poly_bet":
             market_id = str(details.get("market_id", ""))
-            market_label = _poly_market_label(market_id)
-            market_url = _poly_market_url(market_id)
+            provider = str(details.get("provider", "") or "").strip().lower()
+            if provider not in {"poly", "kalshi"}:
+                provider = "kalshi" if market_id.lower().startswith("kalshi:") else "poly"
+            provider_tag = "KAL" if provider == "kalshi" else "POLY"
+            market_label = _poly_market_label(market_id, provider=provider)
+            market_url = _poly_market_url(market_id, provider=provider)
             outcome = str(details.get("outcome", "")).upper()
             amount = float(details.get("amount", 0.0))
             market_link = f" · <a class=\"pill\" href=\"{html_escape(market_url)}\" target=\"_blank\" rel=\"noopener noreferrer\">market</a>" if market_url else ""
-            trade_lines.append(f"<li>{html_escape(when)} · POLY {html_escape(outcome)} ${amount:.2f} · {html_escape(market_label)}{market_link}{share_link}</li>")
+            trade_lines.append(f"<li>{html_escape(when)} · {html_escape(provider_tag)} {html_escape(outcome)} ${amount:.2f} · {html_escape(market_label)}{market_link}{share_link}</li>")
         elif etype == "poly_sell":
             market_id = str(details.get("market_id", ""))
-            market_label = _poly_market_label(market_id)
-            market_url = _poly_market_url(market_id)
+            provider = str(details.get("provider", "") or "").strip().lower()
+            if provider not in {"poly", "kalshi"}:
+                provider = "kalshi" if market_id.lower().startswith("kalshi:") else "poly"
+            provider_tag = "KAL" if provider == "kalshi" else "POLY"
+            market_label = _poly_market_label(market_id, provider=provider)
+            market_url = _poly_market_url(market_id, provider=provider)
             outcome = str(details.get("outcome", "")).upper()
             amount = float(details.get("amount", details.get("proceeds", 0.0)) or 0.0)
             market_link = f" · <a class=\"pill\" href=\"{html_escape(market_url)}\" target=\"_blank\" rel=\"noopener noreferrer\">market</a>" if market_url else ""
-            trade_lines.append(f"<li>{html_escape(when)} · POLY SELL {html_escape(outcome)} ${amount:.2f} · {html_escape(market_label)}{market_link}{share_link}</li>")
+            trade_lines.append(f"<li>{html_escape(when)} · {html_escape(provider_tag)} SELL {html_escape(outcome)} ${amount:.2f} · {html_escape(market_label)}{market_link}{share_link}</li>")
     trades_html = "".join(trade_lines)
     poly_html = "".join(poly_lines)
     algo_updated_label = _iso_to_display(algo_updated_at)
@@ -1611,12 +1619,16 @@ def og_trade_share_card(trade_id: int) -> PlainTextResponse:
         accent = "#64d8a8" if side == "BUY" else "#ff8aa3"
     else:
         market_id = str(details.get("market_id", ""))
-        market_label = _poly_market_label(market_id)
+        provider = str(details.get("provider", "") or "").strip().lower()
+        if provider not in {"poly", "kalshi"}:
+            provider = "kalshi" if market_id.lower().startswith("kalshi:") else "poly"
+        provider_label = "Kalshi" if provider == "kalshi" else "Polymarket"
+        market_label = _poly_market_label(market_id, provider=provider)
         outcome = str(details.get("outcome", "")).upper()
         amount = float(details.get("amount", 0.0))
         shares = float(details.get("shares", 0.0))
         detail_lines.append(f"BET ${amount:.2f} on {outcome} · {market_label} · Shares {shares:.4f}")
-        subtitle = "Simulated Polymarket execution"
+        subtitle = f"Simulated {provider_label} execution"
         accent = "#8f94ff"
 
     holdings = _share_holding_lines(valuation["top_stock_positions"])
