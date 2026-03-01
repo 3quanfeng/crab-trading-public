@@ -24,6 +24,8 @@
   const AGENT_SUMMARY_ENDPOINT_BUILDERS = [
     (target) => `/web/sim/agents/${encodeURIComponent(target)}/recent-trades?limit=1`,
   ];
+  const OWNER_SESSION_ME_PATH = ["/web", "owner", "session", "me"].join("/");
+  const OWNER_EMAIL_STORAGE_KEY = "crab_owner_email";
 
   const state = {
     activeWindow: "30d",
@@ -69,7 +71,6 @@
   const topActionsEl = document.querySelector(".top-actions");
   const accountLinkEl = document.getElementById("discover-account-link");
   const newAgentLinkEl = document.getElementById("discover-new-agent-link");
-  const discoverNavLinkEl = document.getElementById("discover-nav-link");
 
   const discoverSectionsEl = document.getElementById("discover-sections");
   const discoverStatusEl = document.getElementById("discover-status");
@@ -1116,6 +1117,20 @@
     accountLinkEl.textContent = String(text || "").trim() || "Owner";
   }
 
+  function readOwnerEmailCache() {
+    const stores = [window.localStorage, window.sessionStorage];
+    for (const store of stores) {
+      if (!store) continue;
+      try {
+        const value = String(store.getItem(OWNER_EMAIL_STORAGE_KEY) || "").trim();
+        if (value) return value;
+      } catch (_err) {
+        // ignore storage access failures
+      }
+    }
+    return "";
+  }
+
   async function fetchJsonWithFallback(urls, errorPrefix) {
     let fallbackErr = null;
     for (const url of urls) {
@@ -1146,30 +1161,57 @@
   function syncTopbar() {
     if (!(accountLinkEl instanceof HTMLAnchorElement) || !(newAgentLinkEl instanceof HTMLAnchorElement)) return;
 
+    if (topActionsEl instanceof HTMLElement) topActionsEl.classList.remove("guest");
+    newAgentLinkEl.classList.remove("is-hidden");
+    newAgentLinkEl.textContent = "My Dashboard";
+    newAgentLinkEl.href = "/owner/console";
+    newAgentLinkEl.title = "My Dashboard";
+
     if (state.isLoggedIn) {
-      if (topActionsEl instanceof HTMLElement) topActionsEl.classList.remove("guest");
       setAccountButtonLabel(state.ownerEmail || "Owner");
-      accountLinkEl.href = "/discover";
-      accountLinkEl.title = state.ownerEmail || "Owner";
-      newAgentLinkEl.classList.remove("is-hidden");
-      newAgentLinkEl.href = "/skill.md";
-      if (discoverNavLinkEl instanceof HTMLAnchorElement) discoverNavLinkEl.classList.remove("is-hidden");
+      accountLinkEl.href = "/owner/console";
+      accountLinkEl.title = state.ownerEmail || "Owner Console";
       return;
     }
 
-    if (topActionsEl instanceof HTMLElement) topActionsEl.classList.add("guest");
     setAccountButtonLabel("Sign up");
-    accountLinkEl.href = "/skill.md";
+    accountLinkEl.href = "/owner/start?mode=signin";
     accountLinkEl.title = "Sign up";
-    newAgentLinkEl.classList.add("is-hidden");
-    newAgentLinkEl.href = "/skill.md";
-    if (discoverNavLinkEl instanceof HTMLAnchorElement) discoverNavLinkEl.classList.add("is-hidden");
   }
 
   async function detectOwnerSession() {
-    // Public runtime has no owner session surface; always stay in guest mode.
     state.isLoggedIn = false;
     state.ownerEmail = "";
+    let sessionStatus = 0;
+
+    try {
+      const response = await fetch(OWNER_SESSION_ME_PATH, {
+        headers: { Accept: "application/json" },
+        credentials: "include",
+      });
+      sessionStatus = Number(response.status || 0);
+      if (response.ok) {
+        const payload = await response.json();
+        const owner = payload && typeof payload.owner === "object" ? payload.owner : {};
+        const ownerId = String(owner.owner_id || "").trim();
+        if (ownerId) {
+          const ownerEmail = String(owner.email || owner.display_name || ownerId).trim();
+          state.isLoggedIn = true;
+          state.ownerEmail = ownerEmail;
+          return;
+        }
+      }
+    } catch (_err) {
+      sessionStatus = 0;
+    }
+
+    if (sessionStatus !== 401 && sessionStatus !== 403) {
+      const cachedEmail = readOwnerEmailCache();
+      if (cachedEmail) {
+        state.isLoggedIn = true;
+        state.ownerEmail = cachedEmail;
+      }
+    }
   }
 
   async function fetchOwnerRows(windowName, ticker) {

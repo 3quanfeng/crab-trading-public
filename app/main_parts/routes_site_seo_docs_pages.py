@@ -124,6 +124,71 @@ def _seo_algorithm_preview(full_code: str, max_lines: int = 26, max_chars: int =
     }
 
 
+_SEO_LIVE_CASH_ASSETS = {"USD", "USDT", "USDC", "BUSD"}
+
+
+def _seo_live_snapshot_valuation(agent_uuid: str) -> Optional[dict]:
+    auid = str(agent_uuid or "").strip()
+    if not auid:
+        return None
+
+    snapshot = LIVE_STATE.latest_balance_snapshot(auid)
+    if not isinstance(snapshot, dict):
+        return None
+
+    balances = snapshot.get("balances")
+    cash = 0.0
+    crypto = 0.0
+    if isinstance(balances, list):
+        for row in balances:
+            if not isinstance(row, dict):
+                continue
+            asset = str(row.get("asset") or "").upper().strip()
+            if not asset:
+                continue
+            try:
+                usd_value = float(row.get("usd_value") or 0.0)
+            except Exception:
+                continue
+            if usd_value <= 0:
+                continue
+            if asset in _SEO_LIVE_CASH_ASSETS:
+                cash += usd_value
+            else:
+                crypto += usd_value
+
+    try:
+        equity = float(snapshot.get("equity_usd") or 0.0)
+    except Exception:
+        equity = 0.0
+
+    if equity <= 0 and (cash + crypto) > 0:
+        equity = cash + crypto
+    if equity > 0 and (cash + crypto) <= 0:
+        cash = equity
+        crypto = 0.0
+    elif equity > 0 and (cash + crypto) > 0:
+        ratio = equity / (cash + crypto)
+        cash *= ratio
+        crypto *= ratio
+
+    profile = LIVE_STATE.get_profile(auid)
+    baseline_equity = max(0.0, float(profile.get("baseline_equity") or 0.0))
+    return_pct = ((equity - baseline_equity) / baseline_equity) * 100.0 if baseline_equity > 0 else 0.0
+    return {
+        "cash": float(cash),
+        "stock_market_value": 0.0,
+        "crypto_market_value": float(crypto),
+        "poly_market_value": 0.0,
+        "equity": float(equity),
+        "return_pct": float(return_pct),
+        "stock_positions": [],
+        "top_stock_positions": [],
+        "stock_position_count": 0,
+        "has_open_position": bool(crypto > 0),
+    }
+
+
 @app.get("/forum", response_class=HTMLResponse)
 def seo_forum_page(limit: int = 80) -> str:
     safe_limit = max(1, min(int(limit or 80), 200))
@@ -672,6 +737,7 @@ def seo_post_page(post_id: int) -> str:
 def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
     _refresh_mark_to_market_if_due()
     resolved_uuid = _resolve_agent_uuid_or_404(agent_id)
+    resolved_mode = _resolve_agent_mode(resolved_uuid)
     if is_agent_soft_deleted(resolved_uuid):
         raise HTTPException(status_code=404, detail="agent_not_found")
     selected_trade_id: Optional[int] = None
@@ -693,6 +759,10 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
         if not account:
             raise HTTPException(status_code=404, detail="agent_not_found")
         valuation = _account_valuation_locked(account)
+        if resolved_mode == "live":
+            live_valuation = _seo_live_snapshot_valuation(resolved_uuid)
+            if isinstance(live_valuation, dict):
+                valuation = live_valuation
         algo_code = str(getattr(account, "trading_code", "") or "")
         algo_shared = bool(getattr(account, "trading_code_shared", False)) and bool(algo_code.strip())
         algo_language = _seo_algorithm_language(str(getattr(account, "trading_code_language", "python") or "python"))
@@ -761,6 +831,7 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
                 )
 
     stock_positions = valuation["stock_positions"]
+    cash_value = float(valuation["cash"])
     stock_value = float(valuation["stock_market_value"])
     crypto_value = float(valuation["crypto_market_value"])
     poly_value = float(valuation["poly_market_value"])
@@ -1094,7 +1165,7 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
         </div>
         <div class="section">
           <div class="num">${equity:.2f}</div>
-          <div class="muted">equity ({return_pct_text}) · cash ${float(account.cash):.2f} · stocks ${stock_value:.2f} · crypto ${crypto_value:.2f} · poly ${poly_value:.2f}</div>
+          <div class="muted">equity ({return_pct_text}) · cash ${cash_value:.2f} · stocks ${stock_value:.2f} · crypto ${crypto_value:.2f} · poly ${poly_value:.2f}</div>
           <div class="kpi-row">
             <div class="kpi"><div class="muted">Realized gain</div><strong>${realized_gain:.2f}</strong></div>
             <div class="kpi"><div class="muted">Return</div><strong>{html_escape(return_pct_text)}</strong></div>
