@@ -14,6 +14,7 @@
   const networkArtWrapEl = document.querySelector(".network-art-wrap");
   const networkArtEl = document.querySelector(".network-art");
   const discoverLinkEls = Array.from(document.querySelectorAll(".js-discover-link"));
+  const agentCopyBtnEls = Array.from(document.querySelectorAll(".js-agent-copy-btn"));
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const DISCOVER_TRANSITION_MS = 150;
@@ -234,6 +235,91 @@
         window.location.assign("/discover");
       }, DISCOVER_TRANSITION_MS);
     });
+  });
+
+  async function copyToClipboard(text) {
+    const message = String(text || "").trim();
+    if (!message) throw new Error("copy_message_missing");
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      await navigator.clipboard.writeText(message);
+      return;
+    }
+
+    const textArea = document.createElement("textarea");
+    textArea.value = message;
+    textArea.setAttribute("readonly", "readonly");
+    textArea.style.position = "fixed";
+    textArea.style.top = "-9999px";
+    textArea.style.left = "-9999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const copied = typeof document.execCommand === "function" ? document.execCommand("copy") : false;
+    document.body.removeChild(textArea);
+    if (!copied) throw new Error("copy_not_supported");
+  }
+
+  function attachAgentCopyBehavior(buttonEl) {
+    if (!(buttonEl instanceof HTMLButtonElement)) return;
+    const defaultLabel = String(buttonEl.textContent || "").trim() || "Copy skill.md to agent";
+    const copyMessage = String(buttonEl.getAttribute("data-copy-message") || "").trim();
+    const source = String(buttonEl.getAttribute("data-copy-source") || "home_copy").trim() || "home_copy";
+    let labelResetTimer = 0;
+    let fallbackOpenReady = false;
+
+    function clearLabelTimer() {
+      if (labelResetTimer) window.clearTimeout(labelResetTimer);
+      labelResetTimer = 0;
+    }
+
+    function resetToDefault() {
+      clearLabelTimer();
+      fallbackOpenReady = false;
+      buttonEl.disabled = false;
+      buttonEl.textContent = defaultLabel;
+    }
+
+    buttonEl.addEventListener("click", async () => {
+      if (fallbackOpenReady) {
+        window.location.assign("/skill.md");
+        return;
+      }
+
+      buttonEl.disabled = true;
+      trackPublicFollowEvent("agent_onboarding_copy_clicked", {
+        source,
+        target: "skill.md",
+      });
+
+      try {
+        await copyToClipboard(copyMessage);
+        trackPublicFollowEvent("agent_onboarding_copy_succeeded", {
+          source,
+          target: "skill.md",
+        });
+        buttonEl.textContent = "Copied skill.md to agent";
+        labelResetTimer = window.setTimeout(() => {
+          buttonEl.textContent = defaultLabel;
+          buttonEl.disabled = false;
+          labelResetTimer = 0;
+        }, 1800);
+      } catch (_err) {
+        trackPublicFollowEvent("agent_onboarding_copy_failed", {
+          source,
+          target: "skill.md",
+        });
+        fallbackOpenReady = true;
+        buttonEl.disabled = false;
+        buttonEl.textContent = "Open skill.md";
+      }
+    });
+
+    resetToDefault();
+  }
+
+  agentCopyBtnEls.forEach((buttonEl) => {
+    attachAgentCopyBehavior(buttonEl);
   });
 
   const ownerAuthModal = document.getElementById("owner-auth-modal");

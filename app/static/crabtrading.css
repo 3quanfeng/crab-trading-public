@@ -96,7 +96,7 @@ main {
   padding-top: 0;
   min-height: 0;
   text-align: center;
-  transform: translateY(-2.2vh);
+  transform: none;
   position: relative;
   z-index: 5;
 }
@@ -185,6 +185,9 @@ h2 {
   font-size: 17px;
   font-weight: 500;
   letter-spacing: -0.01em;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
   transition: filter 160ms ease, transform 160ms ease;
 }
 
@@ -192,13 +195,98 @@ h2 {
   margin-top: 56px;
 }
 
+.onboarding-actions {
+  margin-top: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 520px);
+  margin-left: auto;
+  margin-right: auto;
+  gap: 12px;
+  text-align: center;
+}
+
+.onboarding-buttons {
+  display: grid;
+  width: min(100%, 520px);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+}
+
+.onboarding-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+}
+
+.onboarding-title {
+  margin: 0;
+  color: rgba(230, 237, 243, 0.78);
+  font-size: 18px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  font-weight: 500;
+  text-align: center;
+}
+
+.onboarding-buttons .cta-btn {
+  margin-top: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 50px;
+}
+
+.cta-btn-content {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 18px 1fr 18px;
+  column-gap: 10px;
+  align-items: center;
+}
+
+.cta-btn-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  justify-self: center;
+}
+
+.cta-btn-label {
+  display: block;
+  justify-self: center;
+}
+
+.cta-btn-spacer {
+  width: 18px;
+  height: 18px;
+  display: block;
+  opacity: 0;
+}
+
+.cta-btn-agent {
+  background: rgba(239, 244, 255, 0.03);
+  color: rgba(223, 233, 248, 0.98);
+  border-color: rgba(221, 230, 247, 0.2);
+}
+
+.cta-btn-agent:hover,
+.cta-btn-agent:focus-visible {
+  border-color: rgba(221, 230, 247, 0.28);
+  background: rgba(239, 244, 255, 0.06);
+}
+
 .hero-secondary-link {
   display: block;
-  width: max-content;
+  width: fit-content;
   margin: 28px auto 0;
-  font-size: 16px;
-  font-weight: 400;
-  color: rgba(230, 237, 243, 0.65);
+  font-size: 18px;
+  font-weight: 500;
+  color: rgba(230, 237, 243, 0.78);
   text-decoration: none;
   transition: all 160ms ease;
   position: relative;
@@ -470,9 +558,16 @@ h2 {
   margin: 0 auto;
 }
 
-.cta-block .cta-btn {
+.cta-block .onboarding-actions {
+  margin-top: 36px;
   margin-left: auto;
   margin-right: auto;
+  text-align: center;
+}
+
+.cta-block .onboarding-buttons .cta-btn {
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .site-footer {
@@ -721,7 +816,7 @@ body.owner-auth-open {
   .hero-content {
     max-width: 640px;
     padding-top: 0;
-    transform: translateY(-1.2vh);
+    transform: none;
   }
 
   .hero-logo {
@@ -745,10 +840,13 @@ body.owner-auth-open {
     margin-top: 6px;
   }
 
-  .hero-content .cta-btn {
+  .hero-content .onboarding-actions {
+    margin-top: 38px;
+  }
+
+  .hero-content .onboarding-buttons .cta-btn {
     height: 48px;
     font-size: 16px;
-    margin-top: 38px;
   }
 
   .define-copy {
@@ -769,6 +867,19 @@ body.owner-auth-open {
 
   .network-art {
     transform: translateY(clamp(-96px, -7vw, -48px));
+  }
+}
+
+@media (min-width: 1200px) and (max-height: 860px) {
+  .onboarding-actions {
+    width: min(100%, 760px);
+  }
+
+  .onboarding-buttons {
+    width: min(100%, 760px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+    row-gap: 12px;
   }
 }
 
@@ -830,17 +941,49 @@ body.owner-auth-open {
     margin-top: 8px;
   }
 
-  .hero-content .cta-btn {
+  .hero-content .onboarding-actions {
+    margin-top: 56px;
+    width: min(100%, 320px);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .onboarding-actions {
+    width: min(100%, 320px);
+    margin-left: auto;
+    margin-right: auto;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .onboarding-buttons {
+    width: 100%;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .onboarding-option {
+    width: 100%;
+    align-items: center;
+  }
+
+  .onboarding-title {
+    font-size: 16px;
+  }
+
+  .onboarding-buttons .cta-btn {
     height: 46px;
     width: min(100%, 320px);
     max-width: 320px;
     padding: 0 22px;
     font-size: 16px;
-    margin-top: 56px;
   }
 
   .hero-secondary-link {
     margin-top: 28px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 16px;
   }
 
   .define-copy {
