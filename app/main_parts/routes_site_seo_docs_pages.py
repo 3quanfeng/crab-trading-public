@@ -127,6 +127,21 @@ def _seo_algorithm_preview(full_code: str, max_lines: int = 26, max_chars: int =
 _SEO_LIVE_CASH_ASSETS = {"USD", "USDT", "USDC", "BUSD"}
 
 
+def _seo_live_realized_gain_lofo(agent_uuid: str) -> float:
+    auid = str(agent_uuid or "").strip()
+    if not auid:
+        return 0.0
+    try:
+        from ..live.service_parts.shared import _compute_realized_and_volume
+    except Exception:
+        return 0.0
+    try:
+        realized, _volume_24h, _filled_count = _compute_realized_and_volume(auid)
+        return float(realized)
+    except Exception:
+        return 0.0
+
+
 def _seo_live_snapshot_valuation(agent_uuid: str) -> Optional[dict]:
     auid = str(agent_uuid or "").strip()
     if not auid:
@@ -1083,7 +1098,14 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
         )
     else:
         algorithm_html = "<p class='muted'>This agent has not shared a trading algorithm yet.</p>"
-    realized_gain = float(getattr(account, "realized_pnl", 0.0)) + float(getattr(account, "poly_realized_pnl", 0.0))
+    if resolved_mode == "live":
+        realized_gain = _seo_live_realized_gain_lofo(resolved_uuid)
+    else:
+        realized_gain = (
+            float(getattr(account, "realized_pnl", 0.0))
+            + float(getattr(account, "poly_realized_pnl", 0.0))
+            + float(getattr(account, "kalshi_realized_pnl", 0.0) or 0.0)
+        )
     curve_html = _render_equity_curve_html(equity_points, realized_gain=realized_gain, return_pct_text=return_pct_text)
     agent_name = str(account.display_name or "").strip() or "Agent"
     avatar_raw = str(getattr(account, "avatar", "") or "").strip()

@@ -403,45 +403,6 @@
     return raw;
   }
 
-  function isCryptoSymbol(symbol) {
-    const text = String(symbol || "").trim().toUpperCase();
-    if (!text) return false;
-    const baseSet = new Set([
-      "BTC",
-      "ETH",
-      "SOL",
-      "BNB",
-      "XRP",
-      "DOGE",
-      "ADA",
-      "AVAX",
-      "DOT",
-      "MATIC",
-      "LTC",
-      "LINK",
-      "UNI",
-      "ATOM",
-      "ARB",
-      "OP",
-    ]);
-    if (baseSet.has(text)) return true;
-    return /(?:USD|USDT|USDC|BUSD)$/.test(text) && baseSet.has(text.replace(/(?:USD|USDT|USDC|BUSD)$/, ""));
-  }
-
-  function categoryLabelFromRow(row) {
-    const rawCategory = String(row.category || "").trim().toLowerCase();
-    if (rawCategory === "stocks") return "US Equity";
-    if (rawCategory === "crypto") return "Crypto";
-    if (rawCategory === "mixed") return "Multi-Asset";
-
-    const symbols = normalizeSymbols(row.symbols || []);
-    if (!symbols.length) return "Multi-Asset";
-    const cryptoCount = symbols.filter((sym) => isCryptoSymbol(sym)).length;
-    if (cryptoCount === symbols.length) return "Crypto";
-    if (cryptoCount === 0) return "US Equity";
-    return "Multi-Asset";
-  }
-
   function cleanSummaryText(text, maxChars = 80) {
     const normalized = sanitizeText(text)
       .split(/\s+/)
@@ -572,6 +533,15 @@
     return null;
   }
 
+  function bornLabelFromRow(row) {
+    const days = toLiveDays(row);
+    if (Number.isFinite(days) && days > 0) {
+      const safeDays = Math.max(1, Math.floor(days));
+      return `Born ${safeDays} ${safeDays === 1 ? "day" : "days"}`;
+    }
+    return "Born recently";
+  }
+
   function toTradesExecuted(data) {
     const direct = Number(data.trades_executed_total);
     if (Number.isFinite(direct) && direct >= 0) return Math.floor(direct);
@@ -653,6 +623,7 @@
         trades_executed_total: toTradesExecuted(data),
         registered_at: String(data.registered_at || "").trim(),
         activity_events: toFiniteNumber(data.activity_stats && data.activity_stats.activity_events) || 0,
+        has_trade_history: Boolean(data.has_trade_history),
         total_profit_generated_usd: toFiniteNumber(data.total_profit_generated_usd),
         capital_allocated_usd: toFiniteNumber(data.capital_allocated_usd),
         balance_usd: toBalanceUsd(data),
@@ -816,22 +787,8 @@
     return list;
   }
 
-  function sortByTrending(rows) {
-    return [...rows].sort((a, b) => {
-      const liveDiff = livePriorityBucket(a) - livePriorityBucket(b);
-      if (liveDiff !== 0) return liveDiff;
-      const activityDiff = Number(b.activity_events || 0) - Number(a.activity_events || 0);
-      if (activityDiff !== 0) return activityDiff;
-      const returnDiff = Number(b.return_pct || 0) - Number(a.return_pct || 0);
-      if (returnDiff !== 0) return returnDiff;
-      return String(a.agent_id || "").localeCompare(String(b.agent_id || ""));
-    });
-  }
-
   function sortByNew(rows) {
     return [...rows].sort((a, b) => {
-      const liveDiff = livePriorityBucket(a) - livePriorityBucket(b);
-      if (liveDiff !== 0) return liveDiff;
       const dateA = parseIsoDate(a.registered_at);
       const dateB = parseIsoDate(b.registered_at);
       const tsA = dateA ? dateA.getTime() : 0;
@@ -842,7 +799,11 @@
   }
 
   function rowsForNewSection(rows) {
-    return rows.filter((row) => Number.isFinite(row.live_days) && row.live_days > 0 && row.live_days <= 30);
+    return rows.filter((row) => {
+      if (!row || !row.has_trade_history) return false;
+      const date = parseIsoDate(row.registered_at);
+      return date instanceof Date && Number.isFinite(date.getTime());
+    });
   }
 
   function takeUniqueRows(rows, usedSet, maxCount = Number.POSITIVE_INFINITY) {
@@ -879,12 +840,10 @@
     const used = new Set();
     const sectionCap = 12;
     const topPool = pinRowsByAgentUuid(sortByReturn(activeRows));
-    const trendingPool = sortByTrending(dedupeRows(state.trendingRows));
     const newPool = sortByNew(rowsForNewSection(activeRows));
 
-    // Reserve headroom for Trending/New first, then backfill Top with remaining rows.
+    // Reserve headroom for New first, then backfill Top with remaining rows.
     const topSeed = takeUniqueRows(topPool, used, sectionCap);
-    const trendingRows = takeUniqueRows(trendingPool, used, sectionCap);
     const newRows = takeUniqueRows(newPool, used, sectionCap);
     const topTail = takeUniqueRows(topPool, used);
     const topRows = [...topSeed, ...topTail];
@@ -896,14 +855,6 @@
         title: `Top Performing (${WINDOW_LABEL[state.activeWindow] || "30 Days"})`,
         note: "Highest return in selected timeframe",
         rows: topRows,
-      });
-    }
-    if (trendingRows.length) {
-      sections.push({
-        id: "trending",
-        title: "Trending (This Week)",
-        note: "Most active strategies by executed events",
-        rows: trendingRows,
       });
     }
     if (newRows.length) {
@@ -930,7 +881,6 @@
   function resetVisibleCounts() {
     state.sectionVisibleCount = {
       top: SECTION_DEFAULT_VISIBLE,
-      trending: SECTION_DEFAULT_VISIBLE,
       newer: SECTION_DEFAULT_VISIBLE,
       all: SECTION_DEFAULT_VISIBLE,
     };
@@ -944,9 +894,8 @@
     const returnPct = Number(row.return_pct || 0);
     const returnClass = returnPct >= 0 ? "up" : "down";
     const rank = parseRank(row.rank) || normalizePositiveInt(indexInSection + 1, 1);
-    const category = categoryLabelFromRow(row);
-    const symbols = normalizeSymbols(row.symbols || []);
-    const primarySymbol = symbols[0] || "Multi-Asset";
+    const isLiveAvatar = String(row.target_mode || "").trim().toLowerCase() === "live";
+    const bornLabel = bornLabelFromRow(row);
     const balanceText = formatMoney(row.balance_usd) || "--";
     const realizedGainValue = toFiniteNumber(row.realized_gain_usd);
     const realizedGainText = formatSignedGainMoney(realizedGainValue) || "--";
@@ -961,10 +910,13 @@
       <article class="discover-card ${toneClass}" style="--stagger:${indexInSection};" data-card-key="${escapeHtml(key)}">
         <a class="discover-agent-link" href="${escapeHtml(detailHref)}" data-agent-link="observe">
           <div class="discover-agent-head">
-            <span class="discover-avatar">${avatarMarkup(row.avatar, displayName)}</span>
+            <span class="discover-avatar${isLiveAvatar ? " is-live" : ""}">
+              ${avatarMarkup(row.avatar, displayName)}
+              ${isLiveAvatar ? '<span class="discover-avatar-live-badge" aria-hidden="true">LIVE</span>' : ""}
+            </span>
             <div class="discover-agent-top">
               <h3 class="discover-agent-name">${escapeHtml(displayName)}</h3>
-              <p class="discover-agent-sub">${escapeHtml(primarySymbol)} • ${escapeHtml(category)}</p>
+              <p class="discover-agent-sub">${escapeHtml(bornLabel)}</p>
             </div>
             <span class="discover-rank-pill" aria-label="Rank ${rank}">#${escapeHtml(rank)}</span>
           </div>
@@ -1376,12 +1328,7 @@
     }
 
     try {
-      const [mainResult, trendingResult] = await Promise.all([
-        fetchRowsForWindow(windowName, ticker),
-        windowName === "7d"
-          ? Promise.resolve(null)
-          : fetchRowsForWindow("7d", ticker).catch(() => null),
-      ]);
+      const mainResult = await fetchRowsForWindow(windowName, ticker);
 
       if (requestId !== state.requestSeq) {
         releaseHeightLock();
@@ -1390,13 +1337,7 @@
 
       state.dataSource = String(mainResult && mainResult.source ? mainResult.source : "public");
       state.activeRows = dedupeRows(mainResult && mainResult.rows ? mainResult.rows : []);
-      state.trendingRows = dedupeRows(
-        windowName === "7d"
-          ? state.activeRows
-          : trendingResult && trendingResult.rows
-          ? trendingResult.rows
-          : state.activeRows
-      );
+      state.trendingRows = state.activeRows;
       state.rowsByWindow[windowName] = state.activeRows;
 
       window.requestAnimationFrame(() => {

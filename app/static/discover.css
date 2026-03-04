@@ -485,11 +485,50 @@ main,
   object-fit: cover;
 }
 
-.discover-avatar span {
+.discover-avatar > span:not(.discover-avatar-live-badge) {
   color: #e6f2ff;
   font-size: 20px;
   font-weight: 700;
   text-shadow: 0 3px 10px rgba(71, 132, 214, 0.5);
+}
+
+.discover-avatar.is-live {
+  position: relative;
+  overflow: hidden;
+}
+
+.discover-avatar.is-live img {
+  border-radius: inherit;
+}
+
+.discover-avatar .discover-avatar-live-badge {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 12px;
+  min-width: 24px;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(146, 246, 198, 0.88);
+  background: linear-gradient(180deg, rgba(48, 198, 133, 0.98), rgba(22, 126, 86, 0.98));
+  color: #effff6;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 10px;
+  text-align: center;
+  box-shadow:
+    0 3px 8px rgba(4, 18, 12, 0.34),
+    inset 0 0 0 1px rgba(230, 255, 243, 0.18);
+  text-shadow: none;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.discover-avatar-sm .discover-avatar-live-badge {
+  display: none;
 }
 
 .discover-agent-top {
