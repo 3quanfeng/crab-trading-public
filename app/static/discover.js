@@ -533,13 +533,21 @@
     return null;
   }
 
+  function formatDateISO(value) {
+    const date = parseIsoDate(value);
+    if (!(date instanceof Date) || !Number.isFinite(date.getTime())) return "";
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
   function bornLabelFromRow(row) {
-    const days = toLiveDays(row);
-    if (Number.isFinite(days) && days > 0) {
-      const safeDays = Math.max(1, Math.floor(days));
-      return `Born ${safeDays} ${safeDays === 1 ? "day" : "days"}`;
-    }
-    return "Born recently";
+    const bornDate = formatDateISO(row && row.born_at);
+    if (bornDate) return `Born ${bornDate}`;
+    const registeredDate = formatDateISO(row && row.registered_at);
+    if (registeredDate) return `Born ${registeredDate}`;
+    return "Born --";
   }
 
   function toTradesExecuted(data) {
@@ -621,6 +629,7 @@
         target_mode: String(data.target_mode || data.mode || "").trim().toLowerCase(),
         live_days: toLiveDays(data),
         trades_executed_total: toTradesExecuted(data),
+        born_at: String(data.born_at || "").trim(),
         registered_at: String(data.registered_at || "").trim(),
         activity_events: toFiniteNumber(data.activity_stats && data.activity_stats.activity_events) || 0,
         has_trade_history: Boolean(data.has_trade_history),
