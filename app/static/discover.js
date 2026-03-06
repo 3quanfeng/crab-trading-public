@@ -897,7 +897,7 @@
 
   function cardMarkup(row, indexInSection) {
     const key = String(row.key || row.agent_uuid || row.agent_id || "").trim();
-    const detailTarget = String(row.agent_id || row.agent_uuid || key || "unknown").trim() || "unknown";
+    const detailTarget = String(row.agent_uuid || row.agent_id || key || "unknown").trim() || "unknown";
     const detailHref = `/agent/${encodeURIComponent(detailTarget)}`;
     const displayName = displayNameForRow(row);
     const returnPct = Number(row.return_pct || 0);

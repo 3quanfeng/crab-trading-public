@@ -127,6 +127,11 @@ def _seo_algorithm_preview(full_code: str, max_lines: int = 26, max_chars: int =
 _SEO_LIVE_CASH_ASSETS = {"USD", "USDT", "USDC", "BUSD"}
 
 
+def _seo_is_live_kraken_agent_name(name: str) -> bool:
+    normalized = "".join(ch for ch in str(name or "").strip().lower() if ch.isalnum())
+    return normalized == "livekraken"
+
+
 def _seo_live_realized_gain_lofo(agent_uuid: str) -> float:
     auid = str(agent_uuid or "").strip()
     if not auid:
@@ -142,86 +147,160 @@ def _seo_live_realized_gain_lofo(agent_uuid: str) -> float:
         return 0.0
 
 
-def _seo_live_snapshot_valuation(agent_uuid: str) -> Optional[dict]:
+def _seo_live_snapshot_valuation(agent_uuid: str, *, agent_name: str = "") -> Optional[dict]:
     auid = str(agent_uuid or "").strip()
     if not auid:
         return None
 
-    snapshot = LIVE_STATE.latest_balance_snapshot(auid)
-    if not isinstance(snapshot, dict):
-        return None
-
-    balances = snapshot.get("balances")
-    cash = 0.0
-    crypto = 0.0
-    if isinstance(balances, list):
-        for row in balances:
-            if not isinstance(row, dict):
-                continue
-            asset = str(row.get("asset") or "").upper().strip()
-            if not asset:
-                continue
-            try:
-                usd_value = float(row.get("usd_value") or 0.0)
-            except Exception:
-                continue
-            if usd_value <= 0:
-                continue
-            if asset in _SEO_LIVE_CASH_ASSETS:
-                cash += usd_value
-            else:
-                crypto += usd_value
-
-    try:
-        equity = float(snapshot.get("equity_usd") or 0.0)
-    except Exception:
-        equity = 0.0
-
-    if equity <= 0 and (cash + crypto) > 0:
-        equity = cash + crypto
-    if equity > 0 and (cash + crypto) <= 0:
-        cash = equity
-        crypto = 0.0
-    elif equity > 0 and (cash + crypto) > 0:
-        ratio = equity / (cash + crypto)
-        cash *= ratio
-        crypto *= ratio
-
     profile = LIVE_STATE.get_profile(auid)
-    baseline_equity = max(0.0, float(profile.get("baseline_equity") or 0.0))
-    if baseline_equity <= 0:
-        first_snapshot = LIVE_STATE.first_balance_snapshot(
-            auid,
-            provider=str(snapshot.get("provider") or ""),
+    latest_any_snapshot = LIVE_STATE.latest_balance_snapshot(auid)
+    try:
+        from ..live.service_parts.shared import (
+            _live_summary_valuation_from_snapshot,
+            _normalize_crypto_live_provider,
+            _owner_live_summary_valuation,
+            _resolve_preferred_live_provider,
+            _resolve_live_baseline_context,
         )
-        if isinstance(first_snapshot, dict):
+    except Exception:
+        _live_summary_valuation_from_snapshot = None
+        _normalize_crypto_live_provider = None
+        _owner_live_summary_valuation = None
+        _resolve_preferred_live_provider = None
+        _resolve_live_baseline_context = None
+
+    def _normalize_provider(value: str) -> str:
+        if callable(_normalize_crypto_live_provider):
             try:
-                baseline_equity = max(0.0, float(first_snapshot.get("equity_usd") or 0.0))
-            except Exception:
-                baseline_equity = 0.0
-        if baseline_equity > 0:
-            try:
-                LIVE_STATE.upsert_profile(
-                    auid,
-                    {
-                        "provider": str(snapshot.get("provider") or ""),
-                        "baseline_equity": float(baseline_equity),
-                    },
-                )
+                return str(_normalize_crypto_live_provider(value, default="") or "").strip()
             except Exception:
                 pass
-    return_pct = ((equity - baseline_equity) / baseline_equity) * 100.0 if baseline_equity > 0 else 0.0
+        raw = str(value or "").strip().lower().replace("-", "_")
+        if raw in {"kraken", "kr"}:
+            return "kraken"
+        if raw in {"binance", "binance_us", "binanceus"}:
+            return "binance_us"
+        return ""
+
+    provider_hint = ""
+    if callable(_resolve_preferred_live_provider):
+        try:
+            provider_hint = str(
+                _resolve_preferred_live_provider(
+                    auid,
+                    profile=profile,
+                    snapshot=latest_any_snapshot if isinstance(latest_any_snapshot, dict) else None,
+                )
+                or ""
+            ).strip()
+        except Exception:
+            provider_hint = ""
+    provider_hint = _normalize_provider(provider_hint)
+    is_live_kraken = _seo_is_live_kraken_agent_name(agent_name)
+    if is_live_kraken:
+        provider_hint = "kraken"
+
+    snapshot = LIVE_STATE.latest_balance_snapshot(auid, provider=provider_hint) if provider_hint else None
+    if not isinstance(snapshot, dict) and isinstance(latest_any_snapshot, dict):
+        snapshot = latest_any_snapshot
+
+    def _valuation_payload_from_dict(valuation: dict) -> dict:
+        cash_value = float(valuation.get("cash") or 0.0)
+        stock_value = float(valuation.get("stock_market_value") or 0.0)
+        crypto_value = float(valuation.get("crypto_market_value") or 0.0)
+        poly_value = float(valuation.get("poly_market_value") or 0.0)
+        has_open_position = any(
+            abs(value) > 1e-9 for value in (stock_value, crypto_value, poly_value)
+        )
+        return {
+            "cash": float(cash_value),
+            "stock_market_value": float(stock_value),
+            "crypto_market_value": float(crypto_value),
+            "poly_market_value": float(poly_value),
+            "equity": float(valuation.get("equity") or 0.0),
+            "return_pct": float(valuation.get("return_pct") or 0.0),
+            "stock_positions": [],
+            "top_stock_positions": [],
+            "stock_position_count": 0,
+            "has_open_position": bool(has_open_position),
+        }
+
+    if (
+        isinstance(snapshot, dict)
+        and callable(_live_summary_valuation_from_snapshot)
+        and callable(_resolve_live_baseline_context)
+    ):
+        provider = _normalize_provider(str(snapshot.get("provider") or "")) or provider_hint
+        if not provider:
+            return None
+        baseline_context = _resolve_live_baseline_context(
+            auid,
+            provider=provider,
+            profile=profile,
+        )
+        valuation = _live_summary_valuation_from_snapshot(
+            snapshot,
+            baseline_equity=float(baseline_context.get("baseline_equity") or 0.0),
+            agent_uuid=auid,
+            provider=provider,
+            baseline_created_at=str(baseline_context.get("baseline_created_at") or ""),
+        )
+        if isinstance(valuation, dict):
+            return _valuation_payload_from_dict(valuation)
+
+    return None
+
+
+def _seo_public_agent_summary_locked(
+    *,
+    resolved_uuid: str,
+    resolved_mode: str,
+    account: Any,
+) -> dict:
+    auid = str(resolved_uuid or "").strip()
+    mode = str(resolved_mode or "").strip().lower()
+    agent_display_name = str(getattr(account, "display_name", "") or "")
+    treat_as_live_for_public = bool(mode == "live" or _seo_is_live_kraken_agent_name(agent_display_name))
+
+    valuation = _account_valuation_locked(account)
+    valuation_source = "paper"
+    if treat_as_live_for_public:
+        live_valuation = _seo_live_snapshot_valuation(
+            auid,
+            agent_name=agent_display_name,
+        )
+        if isinstance(live_valuation, dict):
+            valuation = live_valuation
+            valuation_source = "live_summary"
+        else:
+            valuation_source = "live_unavailable"
+
+    if treat_as_live_for_public:
+        realized_gain = _seo_live_realized_gain_lofo(auid)
+    else:
+        realized_gain = (
+            float(getattr(account, "realized_pnl", 0.0))
+            + float(getattr(account, "poly_realized_pnl", 0.0))
+            + float(getattr(account, "kalshi_realized_pnl", 0.0) or 0.0)
+        )
+
     return {
-        "cash": float(cash),
-        "stock_market_value": 0.0,
-        "crypto_market_value": float(crypto),
-        "poly_market_value": 0.0,
-        "equity": float(equity),
-        "return_pct": float(return_pct),
-        "stock_positions": [],
-        "top_stock_positions": [],
-        "stock_position_count": 0,
-        "has_open_position": bool(crypto > 0),
+        "agent_display_name": agent_display_name,
+        "treat_as_live_for_public": bool(treat_as_live_for_public),
+        "valuation_source": valuation_source,
+        "valuation": {
+            "cash": float(valuation.get("cash") or 0.0),
+            "stock_market_value": float(valuation.get("stock_market_value") or 0.0),
+            "crypto_market_value": float(valuation.get("crypto_market_value") or 0.0),
+            "poly_market_value": float(valuation.get("poly_market_value") or 0.0),
+            "equity": float(valuation.get("equity") or 0.0),
+            "return_pct": float(valuation.get("return_pct") or 0.0),
+            "stock_positions": valuation.get("stock_positions") if isinstance(valuation.get("stock_positions"), list) else [],
+            "top_stock_positions": valuation.get("top_stock_positions") if isinstance(valuation.get("top_stock_positions"), list) else [],
+            "stock_position_count": int(valuation.get("stock_position_count") or 0),
+            "has_open_position": bool(valuation.get("has_open_position", False)),
+        },
+        "realized_gain": float(realized_gain or 0.0),
     }
 
 
@@ -344,6 +423,53 @@ def _seo_live_recent_trade_events(agent_uuid: str, limit: int = 10) -> list[dict
         reverse=True,
     )
     return events[:safe_limit]
+
+
+@app.get("/api/v1/public/agents/{agent_id}/summary", include_in_schema=False)
+@app.get("/web/public/agents/{agent_id}/summary")
+def public_agent_summary(agent_id: str) -> JSONResponse:
+    resolved_uuid = _resolve_agent_uuid_or_404(agent_id)
+    resolved_mode = _resolve_agent_mode(resolved_uuid)
+    with STATE.lock:
+        if _HIDE_TEST_DATA and _is_test_agent(resolved_uuid):
+            raise HTTPException(status_code=404, detail="agent_not_found")
+        account = STATE.accounts.get(resolved_uuid)
+        if account is None:
+            raise HTTPException(status_code=404, detail="agent_not_found")
+        summary = _seo_public_agent_summary_locked(
+            resolved_uuid=resolved_uuid,
+            resolved_mode=resolved_mode,
+            account=account,
+        )
+        valuation = summary["valuation"]
+        agent_display_name = str(summary.get("agent_display_name", "") or "")
+        valuation_source = str(summary.get("valuation_source", "paper") or "paper")
+        treat_as_live_for_public = bool(summary.get("treat_as_live_for_public", False))
+        realized_gain = float(summary.get("realized_gain", 0.0) or 0.0)
+
+    payload = {
+        "status": "ok",
+        "agent_uuid": resolved_uuid,
+        "agent_id": str(getattr(account, "display_name", "") or ""),
+        "mode": resolved_mode,
+        "treat_as_live_for_public": bool(treat_as_live_for_public),
+        "valuation_source": valuation_source,
+        "equity": float(valuation.get("equity") or 0.0),
+        "cash": float(valuation.get("cash") or 0.0),
+        "stocks": float(valuation.get("stock_market_value") or 0.0),
+        "crypto": float(valuation.get("crypto_market_value") or 0.0),
+        "poly": float(valuation.get("poly_market_value") or 0.0),
+        "return_pct": float(valuation.get("return_pct") or 0.0),
+        "realized_gain": float(realized_gain or 0.0),
+    }
+    return JSONResponse(
+        content=payload,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/forum", response_class=HTMLResponse)
@@ -891,9 +1017,15 @@ def seo_post_page(post_id: int) -> str:
 
 
 @app.get("/agent/{agent_id}", response_class=HTMLResponse)
-def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
+def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> HTMLResponse:
     _refresh_mark_to_market_if_due()
     resolved_uuid = _resolve_agent_uuid_or_404(agent_id)
+    requested_identifier = str(agent_id or "").strip()
+    if requested_identifier and requested_identifier != resolved_uuid:
+        canonical_path = _agent_page_path(resolved_uuid)
+        if trade_id is not None:
+            canonical_path = f"{canonical_path}?trade_id={int(trade_id)}"
+        return RedirectResponse(url=canonical_path, status_code=307)
     resolved_mode = _resolve_agent_mode(resolved_uuid)
     if is_agent_soft_deleted(resolved_uuid):
         raise HTTPException(status_code=404, detail="agent_not_found")
@@ -909,18 +1041,41 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
     algo_shared = False
     rank: Optional[int] = None
     active_total = 0
-    live_recent_trades = _seo_live_recent_trade_events(resolved_uuid, limit=10) if resolved_mode == "live" else []
+    live_recent_trades: list[dict] = []
+    treat_as_live_for_public = bool(resolved_mode == "live")
+    realized_gain = 0.0
     with STATE.lock:
         if _HIDE_TEST_DATA and _is_test_agent(resolved_uuid):
             raise HTTPException(status_code=404, detail="agent_not_found")
         account = STATE.accounts.get(resolved_uuid)
         if not account:
             raise HTTPException(status_code=404, detail="agent_not_found")
-        valuation = _account_valuation_locked(account)
-        if resolved_mode == "live":
-            live_valuation = _seo_live_snapshot_valuation(resolved_uuid)
-            if isinstance(live_valuation, dict):
-                valuation = live_valuation
+        summary = _seo_public_agent_summary_locked(
+            resolved_uuid=resolved_uuid,
+            resolved_mode=resolved_mode,
+            account=account,
+        )
+        valuation = dict(summary.get("valuation", {}) or {})
+        treat_as_live_for_public = bool(summary.get("treat_as_live_for_public", False))
+        if treat_as_live_for_public:
+            realized_gain = _seo_live_realized_gain_lofo(resolved_uuid)
+        else:
+            realized_gain = float(summary.get("realized_gain", 0.0) or 0.0)
+        if not valuation:
+            valuation = {
+                "cash": 0.0,
+                "stock_market_value": 0.0,
+                "crypto_market_value": 0.0,
+                "poly_market_value": 0.0,
+                "equity": 0.0,
+                "return_pct": 0.0,
+                "stock_positions": [],
+                "top_stock_positions": [],
+                "stock_position_count": 0,
+                "has_open_position": False,
+            }
+        if treat_as_live_for_public:
+            live_recent_trades = _seo_live_recent_trade_events(resolved_uuid, limit=10)
         algo_code = str(getattr(account, "trading_code", "") or "")
         algo_shared = bool(getattr(account, "trading_code_shared", False)) and bool(algo_code.strip())
         algo_language = _seo_algorithm_language(str(getattr(account, "trading_code_language", "python") or "python"))
@@ -1098,14 +1253,6 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
         )
     else:
         algorithm_html = "<p class='muted'>This agent has not shared a trading algorithm yet.</p>"
-    if resolved_mode == "live":
-        realized_gain = _seo_live_realized_gain_lofo(resolved_uuid)
-    else:
-        realized_gain = (
-            float(getattr(account, "realized_pnl", 0.0))
-            + float(getattr(account, "poly_realized_pnl", 0.0))
-            + float(getattr(account, "kalshi_realized_pnl", 0.0) or 0.0)
-        )
     curve_html = _render_equity_curve_html(equity_points, realized_gain=realized_gain, return_pct_text=return_pct_text)
     agent_name = str(account.display_name or "").strip() or "Agent"
     avatar_raw = str(getattr(account, "avatar", "") or "").strip()
@@ -1338,11 +1485,11 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
           </div>
         </div>
         <div class="section">
-          <div class="num">${equity:.2f}</div>
-          <div class="muted">equity ({return_pct_text}) · cash ${cash_value:.2f} · stocks ${stock_value:.2f} · crypto ${crypto_value:.2f} · poly ${poly_value:.2f}</div>
+          <div class="num" id="agent-equity-value">${equity:.2f}</div>
+          <div class="muted" id="agent-equity-breakdown">equity ({return_pct_text}) · cash ${cash_value:.2f} · stocks ${stock_value:.2f} · crypto ${crypto_value:.2f} · poly ${poly_value:.2f}</div>
           <div class="kpi-row">
-            <div class="kpi"><div class="muted">Realized gain</div><strong>${realized_gain:.2f}</strong></div>
-            <div class="kpi"><div class="muted">Return</div><strong>{html_escape(return_pct_text)}</strong></div>
+            <div class="kpi"><div class="muted">Realized gain</div><strong id="agent-realized-gain-value">${realized_gain:.2f}</strong></div>
+            <div class="kpi"><div class="muted">Return</div><strong id="agent-return-pct-value">{html_escape(return_pct_text)}</strong></div>
           </div>
         </div>
       </article>
@@ -1769,16 +1916,75 @@ def seo_agent_page(agent_id: str, trade_id: Optional[int] = None) -> str:
           }});
         }})();
       </script>
+      <script>
+        (function () {{
+          const summaryTarget = {json.dumps(follow_uuid or account.display_name or resolved_uuid)};
+          if (!summaryTarget) return;
+          const equityEl = document.getElementById("agent-equity-value");
+          const breakdownEl = document.getElementById("agent-equity-breakdown");
+          const realizedEl = document.getElementById("agent-realized-gain-value");
+          const returnEl = document.getElementById("agent-return-pct-value");
+          const fmtNum2 = (value) => {{
+            const num = Number(value || 0);
+            if (!Number.isFinite(num)) return "0.00";
+            return num.toFixed(2);
+          }};
+          const fmtUsd = (value) => `$${{fmtNum2(value)}}`;
+          const fmtPct = (value) => {{
+            const num = Number(value || 0);
+            if (!Number.isFinite(num)) return "+0.00%";
+            return `${{num >= 0 ? "+" : ""}}${{num.toFixed(2)}}%`;
+          }};
+
+          async function refreshSummary() {{
+            try {{
+              const response = await fetch(`/web/public/agents/${{encodeURIComponent(summaryTarget)}}/summary`, {{
+                headers: {{ "Accept": "application/json" }},
+                cache: "no-store",
+              }});
+              if (!response.ok) return;
+              const payload = await response.json();
+              if (!payload || String(payload.status || "") !== "ok") return;
+
+              const returnText = fmtPct(payload.return_pct);
+              if (equityEl) equityEl.textContent = fmtUsd(payload.equity);
+              if (breakdownEl) {{
+                breakdownEl.textContent = `equity (${{returnText}}) · cash ${{fmtNum2(payload.cash)}} · stocks ${{fmtNum2(payload.stocks)}} · crypto ${{fmtNum2(payload.crypto)}} · poly ${{fmtNum2(payload.poly)}}`;
+              }}
+              if (realizedEl) realizedEl.textContent = fmtUsd(payload.realized_gain);
+              if (returnEl) returnEl.textContent = returnText;
+            }} catch (_err) {{
+              return;
+            }}
+          }}
+
+          if (document.readyState === "loading") {{
+            document.addEventListener("DOMContentLoaded", () => {{
+              void refreshSummary();
+            }}, {{ once: true }});
+          }} else {{
+            void refreshSummary();
+          }}
+        }})();
+      </script>
     """
     og_image_path = _trade_og_image_path(selected_trade_id) if selected_trade_id is not None else _agent_og_image_path(account.display_name)
     og_url_path = _agent_share_path(account.display_name, selected_trade_id)
-    return _build_seo_page_html(
+    html_payload = _build_seo_page_html(
         title=f"{account.display_name} | Crab Trading Agent",
         description=_clip_text(f"{account.display_name} tracks markets and runs simulation trading strategies on Crab Trading.", 170),
         canonical_path=_agent_page_path(account.display_name),
         body_html=body_html,
         og_image_path=og_image_path,
         og_url_path=og_url_path,
+    )
+    return HTMLResponse(
+        content=html_payload,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
     )
 
 
