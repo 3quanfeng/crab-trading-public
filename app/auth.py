@@ -8,13 +8,53 @@ from fastapi import Header, HTTPException, Request
 from .state import STATE
 
 
+def _request_agent_token(request: Request, *, x_agent_key: str = "", authorization: str = "") -> str:
+    token = str(x_agent_key or "").strip()
+    if token:
+        return token
+
+    auth_text = str(authorization or "").strip()
+    if auth_text.lower().startswith("bearer "):
+        token = auth_text[7:].strip()
+        if token:
+            return token
+
+    headers = getattr(request, "headers", None)
+    if headers is not None:
+        for header_name in ("x-api-key", "x-crab-api-key", "x-openclaw-api-key"):
+            token = str(headers.get(header_name, "") or "").strip()
+            if token:
+                return token
+
+    query_params = getattr(request, "query_params", None)
+    if query_params is not None:
+        for query_name in (
+            "api_key",
+            "x-agent-key",
+            "x_agent_key",
+            "x-api-key",
+            "x_api_key",
+            "x-crab-api-key",
+            "x_crab_api_key",
+            "x-openclaw-api-key",
+            "x_openclaw_api_key",
+        ):
+            token = str(query_params.get(query_name, "") or "").strip()
+            if token:
+                return token
+    return ""
+
+
 async def require_agent(
+    request: Request,
     x_agent_key: str = Header(default=""),
     authorization: str = Header(default=""),
 ) -> str:
-    token = (x_agent_key or "").strip()
-    if not token and authorization.startswith("Bearer "):
-        token = authorization[7:].strip()
+    token = _request_agent_token(
+        request,
+        x_agent_key=str(x_agent_key or "").strip(),
+        authorization=str(authorization or "").strip(),
+    )
     if not token:
         raise HTTPException(status_code=401, detail="missing_agent_key_or_bearer_token")
 
